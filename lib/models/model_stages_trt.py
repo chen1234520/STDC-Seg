@@ -162,8 +162,26 @@ class ContextPath(nn.Module):
 
             self.H32 = torch.tensor(23)
             self.W32 = torch.tensor(30)
+        elif self.input_size == 320:
+            self.H8 = torch.tensor(40)
+            self.W8 = torch.tensor(80)
+
+            self.H16 = torch.tensor(20)
+            self.W16 = torch.tensor(40)
+
+            self.H32 = torch.tensor(10)
+            self.W32 = torch.tensor(20)
+        elif self.input_size == 192:
+            self.H8 = torch.tensor(24)
+            self.W8 = torch.tensor(24)
+
+            self.H16 = torch.tensor(12)
+            self.W16 = torch.tensor(12)
+
+            self.H32 = torch.tensor(6)
+            self.W32 = torch.tensor(6)        
         else:
-            print("input_size is not in input_size lists")
+            print("input_size is not in input_size lists{}".format(self.input_size))
             exit(0)
 
         self.init_weight()
@@ -348,8 +366,14 @@ class BiSeNet(nn.Module):
         elif self.input_size == 720:
             self.H = torch.tensor(720)
             self.W = torch.tensor(960)
+        elif self.input_size == 320:
+            self.H = torch.tensor(320)
+            self.W = torch.tensor(640)
+        elif self.input_size == 192:
+            self.H = torch.tensor(192)
+            self.W = torch.tensor(192)                
         else:
-            print("input_size is not in input_size lists")
+            print("input_size is not in input_size lists:{}".format(self.input_size))
             exit(0)
         
         self.init_weight()

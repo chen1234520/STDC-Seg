@@ -6,6 +6,45 @@ Mingyuan Fan, Shenqi Lai, Junshi Huang, Xiaoming Wei, Zhenhua Chai, Junfeng Luo,
 
 In CVPR 2021.
 
+## 我(mgchen)在原作者的基础上所做的工作:
+1.由于编译问题，将InPlaceABNSync全部替换为pytorch官方的nn.BatchNorm2d
+
+2.由于部署时转换onnx模型报错的问题,使用torch.mean替换avg_pool2d来进行平均池化的操作.
+
+3.增加pytorch转onnx模型的脚本，在./tools/export_onnx_STDC.py
+
+同时对应的onnx模型推理脚本在./tools/inference_onnx_list.py inference_onnx.py
+
+不过工程中转Tensorrt的脚本并没有修改，有需要使用的请自行修改。可参考BiSeNet的项目代码
+
+**4.进行了一些模型加速实验**
+
+4.1 裁剪网络最后一个部分的通道数(512->256).train_shengxiancheng_cutNet.py
+
+4.2 删除网络中下采样32倍的模块.(我的实验中输入数据尺寸较小，下采样32倍后特征几乎没有,所以删掉这个部分,在简单的分割任务中，对模型的精度影响不大)train_shengxiancheng_delNet.py
+
+4.3 使用深度分离卷积dw替换掉网络中计算量大的几个卷积.train_shengxiancheng_DW.
+
+PS:由于只替换了少量卷积，所以提速效果不明显.并且怀疑在嵌入式芯片上,对dw卷积的加速并不好.
+
+## 提供一些使用说明
+./train_lifadian.py       各种训练脚本(以train开头)
+
+./evaluation_lifadian.py    测试脚本，测试模型miou指标
+
+./tools/export_onnx_STDC.py     pytorch转onnx模型脚本
+
+./tools/export_libtorch.py    pytorch转libtorch模型脚本
+
+./tools/inference_onnx_list.py        onnx模型推理脚本  输入单张图片 批量图片  视频 
+
+./latency/run_demo_stages_mgchen.py      pytorch模型推理脚本(可以测试单张图片和测FPS)
+
+./lib    网络结构在这个路径下
+
+./
+
+
 ## Overview
 
 <p align="center">

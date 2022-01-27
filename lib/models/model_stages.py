@@ -8,9 +8,9 @@ import torch.nn.functional as F
 import torchvision
 
 
-from nets.stdcnet import STDCNet1446, STDCNet813
-from modules.bn import InPlaceABNSync as BatchNorm2d
-# BatchNorm2d = nn.BatchNorm2d
+from .stdcnet import STDCNet1446, STDCNet813
+# from modules.bn import InPlaceABNSync as BatchNorm2d
+BatchNorm2d = nn.BatchNorm2d    #mgchen
 
 class ConvBNReLU(nn.Module):
     def __init__(self, in_chan, out_chan, ks=3, stride=1, padding=1, *args, **kwargs):
@@ -21,8 +21,8 @@ class ConvBNReLU(nn.Module):
                 stride = stride,
                 padding = padding,
                 bias = False)
-        # self.bn = BatchNorm2d(out_chan)
-        self.bn = BatchNorm2d(out_chan, activation='none')
+        self.bn = BatchNorm2d(out_chan)         #mgchen
+        # self.bn = BatchNorm2d(out_chan, activation='none')
         self.relu = nn.ReLU()
         self.init_weight()
 
@@ -74,15 +74,19 @@ class AttentionRefinementModule(nn.Module):
         super(AttentionRefinementModule, self).__init__()
         self.conv = ConvBNReLU(in_chan, out_chan, ks=3, stride=1, padding=1)
         self.conv_atten = nn.Conv2d(out_chan, out_chan, kernel_size= 1, bias=False)
-        # self.bn_atten = BatchNorm2d(out_chan)
-        self.bn_atten = BatchNorm2d(out_chan, activation='none')
+        self.bn_atten = BatchNorm2d(out_chan)   #mgchen
+        # self.bn_atten = BatchNorm2d(out_chan, activation='none')
 
         self.sigmoid_atten = nn.Sigmoid()
         self.init_weight()
 
     def forward(self, x):
         feat = self.conv(x)
-        atten = F.avg_pool2d(feat, feat.size()[2:])
+        # x_shape = [int(s) for s in feat.shape[2:]]
+        # atten = F.avg_pool2d(feat, x_shape)
+        # atten = F.avg_pool2d(feat, feat.size()[2:])
+        atten = torch.mean(feat, dim=(2, 3), keepdim=True)  # 全局平均池化
+
         atten = self.conv_atten(atten)
         atten = self.bn_atten(atten)
         atten = self.sigmoid_atten(atten)
@@ -131,26 +135,33 @@ class ContextPath(nn.Module):
     def forward(self, x):
         H0, W0 = x.size()[2:]
 
+        # step1.经过主干网络
         feat2, feat4, feat8, feat16, feat32 = self.backbone(x)
         H8, W8 = feat8.size()[2:]
         H16, W16 = feat16.size()[2:]
         H32, W32 = feat32.size()[2:]
         
-        avg = F.avg_pool2d(feat32, feat32.size()[2:])
+        # step2.全局平均池化
+        # avg = F.avg_pool2d(feat32, feat32.size()[2:])
+        # feat32_shape = [int(s) for s in feat32.shape[2:]]
+        # avg = F.avg_pool2d(feat32, feat32_shape)
+        avg = torch.mean(feat32, dim=(2, 3), keepdim=True)  # 全局平均池化
 
-        avg = self.conv_avg(avg)
-        avg_up = F.interpolate(avg, (H32, W32), mode='nearest')
+        avg = self.conv_avg(avg)    # 1*1 conv
+        avg_up = F.interpolate(avg, (H32, W32), mode='nearest')     # 上采样到32X
 
-        feat32_arm = self.arm32(feat32)
-        feat32_sum = feat32_arm + avg_up
-        feat32_up = F.interpolate(feat32_sum, (H16, W16), mode='nearest')
-        feat32_up = self.conv_head32(feat32_up)
+        # step3. 32X与全局平均池化结果融合
+        feat32_arm = self.arm32(feat32)     # 32X的ARM模块
+        feat32_sum = feat32_arm + avg_up    # 特征融合(32X + avg)
+        feat32_up = F.interpolate(feat32_sum, (H16, W16), mode='nearest')   #上采样到16X
+        feat32_up = self.conv_head32(feat32_up) # 3*3conv
 
-        feat16_arm = self.arm16(feat16)
-        feat16_sum = feat16_arm + feat32_up
-        feat16_up = F.interpolate(feat16_sum, (H8, W8), mode='nearest')
-        feat16_up = self.conv_head16(feat16_up)
+        feat16_arm = self.arm16(feat16)             # 16X的ARM模块
+        feat16_sum = feat16_arm + feat32_up     # 特征融合(16X + 32X)
+        feat16_up = F.interpolate(feat16_sum, (H8, W8), mode='nearest')  #上采样到8X
+        feat16_up = self.conv_head16(feat16_up)     # 3*3conv
         
+        #            2X       4X        8X       16X        16up            32up
         return feat2, feat4, feat8, feat16, feat16_up, feat32_up # x8, x16
 
     def init_weight(self):
@@ -194,7 +205,11 @@ class FeatureFusionModule(nn.Module):
     def forward(self, fsp, fcp):
         fcat = torch.cat([fsp, fcp], dim=1)
         feat = self.convblk(fcat)
-        atten = F.avg_pool2d(feat, feat.size()[2:])
+        # atten = F.avg_pool2d(feat, feat.size()[2:])
+        # feat_shape = [int(s) for s in feat.shape[2:]]
+        # atten = F.avg_pool2d(feat, feat_shape)
+        atten = torch.mean(feat, dim=(2, 3), keepdim=True)  # 全局平均池化
+
         atten = self.conv1(atten)
         atten = self.relu(atten)
         atten = self.conv2(atten)
@@ -231,9 +246,7 @@ class BiSeNet(nn.Module):
         self.use_boundary_16 = use_boundary_16
         # self.heat_map = heat_map
         self.cp = ContextPath(backbone, pretrain_model, use_conv_last=use_conv_last)
-        
-        
-        
+
         if backbone == 'STDCNet1446':
             conv_out_inplanes = 128
             sp2_inplanes = 32
@@ -254,7 +267,7 @@ class BiSeNet(nn.Module):
             print("backbone is not in backbone lists")
             exit(0)
 
-        self.ffm = FeatureFusionModule(inplane, 256)
+        self.ffm = FeatureFusionModule(inplane, 256)    # FFN融合模块
         self.conv_out = BiSeNetOutput(256, 256, n_classes)
         self.conv_out16 = BiSeNetOutput(conv_out_inplanes, 64, n_classes)
         self.conv_out32 = BiSeNetOutput(conv_out_inplanes, 64, n_classes)
@@ -262,8 +275,8 @@ class BiSeNet(nn.Module):
         self.conv_out_sp16 = BiSeNetOutput(sp16_inplanes, 64, 1)
         
         self.conv_out_sp8 = BiSeNetOutput(sp8_inplanes, 64, 1)
-        self.conv_out_sp4 = BiSeNetOutput(sp4_inplanes, 64, 1)
-        self.conv_out_sp2 = BiSeNetOutput(sp2_inplanes, 64, 1)
+        self.conv_out_sp4 = BiSeNetOutput(sp4_inplanes, 64, 1)      # 4X的热力图
+        self.conv_out_sp2 = BiSeNetOutput(sp2_inplanes, 64, 1)      # 2X的热力图
         self.init_weight()
 
     def forward(self, x):
@@ -271,24 +284,25 @@ class BiSeNet(nn.Module):
         
         feat_res2, feat_res4, feat_res8, feat_res16, feat_cp8, feat_cp16 = self.cp(x)
 
-        feat_out_sp2 = self.conv_out_sp2(feat_res2)
+        feat_out_sp2 = self.conv_out_sp2(feat_res2)     # 2X的热力图
 
-        feat_out_sp4 = self.conv_out_sp4(feat_res4)
+        feat_out_sp4 = self.conv_out_sp4(feat_res4)     # 4X的热力图
   
-        feat_out_sp8 = self.conv_out_sp8(feat_res8)
+        feat_out_sp8 = self.conv_out_sp8(feat_res8)     # 8X的热力图
 
-        feat_out_sp16 = self.conv_out_sp16(feat_res16)
+        feat_out_sp16 = self.conv_out_sp16(feat_res16)       # 16X的热力图
 
-        feat_fuse = self.ffm(feat_res8, feat_cp8)
+        feat_fuse = self.ffm(feat_res8, feat_cp8)   # 融合stage3(8X)和stage4上采样后 的特征图
 
-        feat_out = self.conv_out(feat_fuse)
-        feat_out16 = self.conv_out16(feat_cp8)
-        feat_out32 = self.conv_out32(feat_cp16)
+        # 网络输出结果
+        feat_out = self.conv_out(feat_fuse)               # 8X的输出output
+        feat_out16 = self.conv_out16(feat_cp8)      # 16x的output(尺寸应该是8X)
+        feat_out32 = self.conv_out32(feat_cp16)    # 32x的output(尺寸应该是16X)
 
+        # 上采样到原图大小
         feat_out = F.interpolate(feat_out, (H, W), mode='bilinear', align_corners=True)
         feat_out16 = F.interpolate(feat_out16, (H, W), mode='bilinear', align_corners=True)
         feat_out32 = F.interpolate(feat_out32, (H, W), mode='bilinear', align_corners=True)
-
 
         if self.use_boundary_2 and self.use_boundary_4 and self.use_boundary_8:
             return feat_out, feat_out16, feat_out32, feat_out_sp2, feat_out_sp4, feat_out_sp8

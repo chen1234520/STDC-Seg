@@ -5,9 +5,15 @@ import sys
 import logging
 import torch
 import numpy as np
+import cv2
+import torch.nn.functional as F
+
 
 from thop import profile
 sys.path.append("./")
+
+from transform import ToTensor
+
 
 from utils.darts_utils import create_exp_dir, plot_op, plot_path_width, objective_acc_lat
 try:
@@ -44,22 +50,14 @@ def main():
     use_boundary_8 = True
     use_boundary_16 = False
     use_conv_last = False
-    n_classes = 19
+    n_classes = 4  #mgchen
     
     # case1.STDC1Seg-50 250.4FPS on NVIDIA GTX 1080Ti
-    # n_classes = 4
-    # backbone = 'STDCNet813'
-    # methodName = 'train_STDC1-Seg-bianglang20211119'
-    # inputSize = 192
-    # inputScale = 50
-    # inputDimension = (1, 3, 192, 192)
-
-    # case1.STDC1Seg-50 250.4FPS on NVIDIA GTX 1080Ti
-    # backbone = 'STDCNet813'
-    # methodName = 'STDC1-Seg'
-    # inputSize = 512
-    # inputScale = 50
-    # inputDimension = (1, 3, 512, 1024)
+    backbone = 'STDCNet813'
+    methodName = 'train_STDC1-Seg-20211118'
+    inputSize = 192
+    inputScale = 50
+    inputDimension = (1, 3, 192, 192)
 
     # case2.STDC1Seg-75 126.7FPS on NVIDIA GTX 1080Ti
     # backbone = 'STDCNet813'
@@ -69,11 +67,11 @@ def main():
     # inputDimension = (1, 3, 768, 1536)
 
     # case3.STDC2Seg-50 188.6FPS on NVIDIA GTX 1080Ti
-    backbone = 'STDCNet1446'
-    methodName = 'STDC2-Seg'
-    inputSize = 320
-    inputScale = 50
-    inputDimension = (1, 3, 320, 320)
+    # backbone = 'STDCNet1446'
+    # methodName = 'STDC2-Seg'
+    # inputSize = 512
+    # inputScale = 50
+    # inputDimension = (1, 3, 512, 1024)
 
     # case4.STDC2Seg-75 97.0FPS on NVIDIA GTX 1080Ti
     # backbone = 'STDCNet1446'
@@ -89,16 +87,44 @@ def main():
     
 
     print('loading parameters...')
-    respth = './checkpoints/{}/'.format(methodName)
-    # respth = './checkpoints/{}/pths/'.format(methodName)
-    save_pth = os.path.join(respth, 'model_maxmIOU{}.pth'.format(inputScale))
+    respth = './checkpoints/{}/pths/'.format(methodName)
+    save_pth = os.path.join(respth, 'model_final.pth')
     model.load_state_dict(torch.load(save_pth))
-    model = model.cuda()
+    model.eval()
+    model.cuda()
     #####################################################
 
-    latency = compute_latency(model, inputDimension)
-    print("{}{} FPS:".format(methodName, inputScale) + str(1000./latency))
-    logging.info("{}{} FPS:".format(methodName, inputScale) + str(1000./latency))
+    palette = np.random.randint(0, 256, (256, 3), dtype=np.uint8)
+
+    to_tensor = ToTensor(
+    mean=(0.3257, 0.3690, 0.3223), # city, rgb
+    std=(0.2112, 0.2148, 0.2115),
+    )
+    im = cv2.imread("/root/chenguang/project/STDC-Seg-master/data/shiliu/leftImg8bit/val/shiliu/20210505095657752_leftImg8bit.png")[:, :, ::-1]
+    im = to_tensor(dict(im=im, lb=None))['im'].unsqueeze(0).cuda()
+    # inference
+    # out = model(im).squeeze().detach().cpu().numpy().astype('int64')
+    out = model(im)[0]
+    prob = F.softmax(out, 1).detach().cpu().numpy().astype('int64')
+
+    print("out")
+    print(out.shape)
+    print(prob.shape)
+    print(prob)
+
+    pred = palette[prob]
+
+    print("pred")
+    print()
+
+    cv2.imwrite('./res.jpg', pred)
+    print("access!")
+
+
+
+    # latency = compute_latency(model, inputDimension)
+    # print("{}{} FPS:".format(methodName, inputScale) + str(1000./latency))
+    # logging.info("{}{} FPS:".format(methodName, inputScale) + str(1000./latency))
 
     # calculate FLOPS and params
     '''

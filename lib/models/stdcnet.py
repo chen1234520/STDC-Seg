@@ -3,8 +3,6 @@ import torch.nn as nn
 from torch.nn import init
 import math
 
-
-
 class ConvX(nn.Module):
     def __init__(self, in_planes, out_planes, kernel=3, stride=1):
         super(ConvX, self).__init__()
@@ -15,7 +13,6 @@ class ConvX(nn.Module):
     def forward(self, x):
         out = self.relu(self.bn(self.conv(x)))
         return out
-
 
 class AddBottleneck(nn.Module):
     def __init__(self, in_planes, out_planes, block_num=3, stride=1):
@@ -63,8 +60,6 @@ class AddBottleneck(nn.Module):
             x = self.skip(x)
 
         return torch.cat(out_list, dim=1) + x
-
-
 
 class CatBottleneck(nn.Module):
     def __init__(self, in_planes, out_planes, block_num=3, stride=1):
@@ -294,6 +289,97 @@ class STDCNet813(nn.Module):
         out = self.dropout(out)
         out = self.linear(out)
         return out
+
+class STDCNet813_Del(nn.Module):
+    def __init__(self, base=64, layers=[2,2,2], block_num=4, type="cat", num_classes=1000, dropout=0.20, pretrain_model='', use_conv_last=False):
+        super(STDCNet813_Del, self).__init__()
+        if type == "cat":
+            block = CatBottleneck
+        elif type == "add":
+            block = AddBottleneck
+        self.use_conv_last = use_conv_last
+        self.features = self._make_layers(base, layers, block_num, block)
+        self.conv_last = ConvX(base*16, max(1024, base*16), 1, 1)
+        self.gap = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(max(1024, base*16), max(1024, base*16), bias=False)
+        self.bn = nn.BatchNorm1d(max(1024, base*16))
+        self.relu = nn.ReLU(inplace=True)
+        self.dropout = nn.Dropout(p=dropout)
+        self.linear = nn.Linear(max(1024, base*16), num_classes, bias=False)
+
+        self.x2 = nn.Sequential(self.features[:1])
+        self.x4 = nn.Sequential(self.features[1:2])
+        self.x8 = nn.Sequential(self.features[2:4])
+        self.x16 = nn.Sequential(self.features[4:6])
+        # self.x32 = nn.Sequential(self.features[6:])
+
+        if pretrain_model:
+            print('use pretrain model {}'.format(pretrain_model))
+            self.init_weight(pretrain_model)
+        else:
+            self.init_params()
+
+    def init_weight(self, pretrain_model):
+        
+        state_dict = torch.load(pretrain_model)["state_dict"]
+        self_state_dict = self.state_dict()
+        for k, v in state_dict.items():
+            self_state_dict.update({k: v})
+        self.load_state_dict(self_state_dict)
+
+    def init_params(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                init.kaiming_normal_(m.weight, mode='fan_out')
+                if m.bias is not None:
+                    init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                init.constant_(m.weight, 1)
+                init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                init.normal_(m.weight, std=0.001)
+                if m.bias is not None:
+                    init.constant_(m.bias, 0)
+
+    def _make_layers(self, base, layers, block_num, block):
+        features = []
+        features += [ConvX(3, base//2, 3, 2)]
+        features += [ConvX(base//2, base, 3, 2)]
+
+        for i, layer in enumerate(layers):
+            for j in range(layer):
+                if i == 0 and j == 0:
+                    features.append(block(base, base*4, block_num, 2))
+                elif j == 0:
+                    features.append(block(base*int(math.pow(2,i+1)), base*int(math.pow(2,i+2)), block_num, 2))
+                else:
+                    features.append(block(base*int(math.pow(2,i+2)), base*int(math.pow(2,i+2)), block_num, 1))
+
+        return nn.Sequential(*features)
+
+    def forward(self, x):
+        feat2 = self.x2(x)
+        feat4 = self.x4(feat2)
+        feat8 = self.x8(feat4)
+        feat16 = self.x16(feat8)
+        # feat32 = self.x32(feat16)
+        # if self.use_conv_last:
+        #    feat32 = self.conv_last(feat32)
+
+        return feat2, feat4, feat8, feat16#, feat32
+
+    def forward_impl(self, x):
+        out = self.features(x)
+        out = self.conv_last(out).pow(2)
+        out = self.gap(out).flatten(1)
+        out = self.fc(out)
+        # out = self.bn(out)
+        out = self.relu(out)
+        # out = self.relu(self.bn(self.fc(out)))
+        out = self.dropout(out)
+        out = self.linear(out)
+        return out
+
 
 if __name__ == "__main__":
     model = STDCNet813(num_classes=1000, dropout=0.00, block_num=4)
