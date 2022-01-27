@@ -42,8 +42,9 @@ PS:由于只替换了少量卷积，所以提速效果不明显.并且怀疑在�
 
 ./lib    网络结构在这个路径下
 
-./
+./tools/json_to_labelpng_addlabelmap_mgchen.py   将labelme的json标注格式转换为 cityscape黑色图像标注格式.（需要和labelme包一起使用）
 
+*说明结束，下面是原作者readme*
 
 ## Overview
 
