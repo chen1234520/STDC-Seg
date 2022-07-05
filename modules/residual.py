@@ -12,7 +12,7 @@ class IdentityResidualBlock(nn.Module):
                  stride=1,
                  dilation=1,
                  groups=1,
-                 norm_act=ABN,
+                 norm_act=nn.BatchNorm2d,
                  dropout=None):
         """Configurable identity-mapping residual block
 

@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # -*- encoding: utf-8 -*-
-
+"""
+cut:Cut版是裁剪最后conv层的通道数
+"""
 
 import torch
 import torch.nn as nn
@@ -10,7 +12,7 @@ import torchvision
 
 from .stdcnet import STDCNet1446, STDCNet813
 # from modules.bn import InPlaceABNSync as BatchNorm2d
-BatchNorm2d = nn.BatchNorm2d    #mgchen
+BatchNorm2d = nn.BatchNorm2d    #mgchen     为了部署方便，使用标准的bn替换论文中的syncBn层
 
 class ConvBNReLU(nn.Module):
     def __init__(self, in_chan, out_chan, ks=3, stride=1, padding=1, *args, **kwargs):

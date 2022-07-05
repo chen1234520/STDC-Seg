@@ -7,7 +7,7 @@ from .bn import ABN
 
 
 class DenseModule(nn.Module):
-    def __init__(self, in_channels, growth, layers, bottleneck_factor=4, norm_act=ABN, dilation=1):
+    def __init__(self, in_channels, growth, layers, bottleneck_factor=4, norm_act=nn.BatchNorm2d, dilation=1):#mgchen
         super(DenseModule, self).__init__()
         self.in_channels = in_channels
         self.growth = growth

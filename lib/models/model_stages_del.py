@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # -*- encoding: utf-8 -*-
-
+"""
+del:Del版是删除下采样32倍block的网络结构
+"""
 
 import torch
 import torch.nn as nn

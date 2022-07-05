@@ -313,7 +313,7 @@ if __name__ == "__main__":
 
     # 测试槟榔任务
     model_path = 'checkpoints/STDC1-Del-ShengXC-128*96-20220115inside/pths/model_iter29500_mIOU50_0.7989_mIOU75_0.8853.pth'
-    evaluatev0(model_path, dspth='/root/chenguang/data/shengxiancheng-inside/', backbone='STDCNet813Del', scale=1, 
+    evaluatev0(model_path, dspth='/root/mgchen/data/shengxiancheng-inside/', backbone='STDCNet813Del', scale=1,
     use_boundary_2=False, use_boundary_4=False, use_boundary_8=True, use_boundary_16=False)
 
     #STDC1-Seg75 mIoU 0.7450

@@ -25,6 +25,10 @@ In CVPR 2021.
 
 4.3 使用深度分离卷积dw替换掉网络中计算量大的几个卷积.train_shengxiancheng_DW.
 
+4.4 ./lib/models/model_stages_del.py model_stages_DW.py model_stages_modifies.py
+分別是删除下采样32倍block、替換dw卷积、删除最后一个卷积层通道数的网络结构。
+另外由于在rknn嵌入式芯片部署，对上采样 下采样等算子进行了替换。
+
 PS:由于只替换了少量卷积，所以提速效果不明显.并且怀疑在嵌入式芯片上,对dw卷积的加速并不好.
 
 ## 提供一些使用说明

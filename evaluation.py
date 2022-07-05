@@ -2,8 +2,11 @@
 # -*- encoding: utf-8 -*-
 
 from logger import setup_logger
-from models.model_stages import BiSeNet
-from cityscapes import CityScapes
+from lib.models.model_stages import BiSeNet
+from lib.models.model_stages_modifies import BiSeNet_cutNet
+from cityscapes import CityScapes 
+from cityscapes import CityScapesBingLang
+
 
 import torch
 import torch.nn as nn
@@ -18,6 +21,7 @@ import time
 import numpy as np
 from tqdm import tqdm
 import math
+import cv2
 
 class MscEvalV0(object):
 
@@ -36,23 +40,25 @@ class MscEvalV0(object):
 
             N, _, H, W = label.shape
 
-            label = label.squeeze(1).cuda()
+            label = label.squeeze(1).cuda()     #label.shape = (batch, W , H) or (batch, H , W)
+
             size = label.size()[-2:]
 
             imgs = imgs.cuda()
 
             N, C, H, W = imgs.size()
-            new_hw = [int(H*self.scale), int(W*self.scale)]
+            # new_hw = [int(H*self.scale), int(W*self.scale)]
+            new_hw = (512, 512) # 固定尺寸
 
-            imgs = F.interpolate(imgs, new_hw, mode='bilinear', align_corners=True)
+            imgs = F.interpolate(imgs, new_hw, mode='bilinear', align_corners=True) # 采样
 
             logits = net(imgs)[0]
   
-            logits = F.interpolate(logits, size=size,
-                    mode='bilinear', align_corners=True)
-            probs = torch.softmax(logits, dim=1)
-            preds = torch.argmax(probs, dim=1)
-            keep = label != self.ignore_label
+            logits = F.interpolate(logits, size=size, mode='bilinear', align_corners=True)  # torch.Size([1, 4, 190, 190])
+            probs = torch.softmax(logits, dim=1)                        # torch.Size([1, 4, 190, 190])
+            preds = torch.argmax(probs, dim=1)   # 取每个像素点得分最大的类别   # torch.Size([1, 190, 190]
+
+            keep = label != self.ignore_label   # 过滤255的区域(不等于255值为true，等于255值为false)
             hist += torch.bincount(
                 label[keep] * n_classes + preds[keep],
                 minlength=n_classes ** 2
@@ -72,14 +78,15 @@ def evaluatev0(respth='./pretrained', dspth='./data', backbone='CatNetSmall', sc
     ## dataset
     batchsize = 5
     n_workers = 2
-    dsval = CityScapes(dspth, mode='val')
+    
+    dsval = CityScapes(dspth, mode='val', cropsize=cropsize, randomscale=randomscale)
     dl = DataLoader(dsval,
                     batch_size = batchsize,
                     shuffle = False,
                     num_workers = n_workers,
                     drop_last = False)
 
-    n_classes = 19
+    n_classes = 4  # 19 mgchen
     print("backbone:", backbone)
     net = BiSeNet(backbone=backbone, n_classes=n_classes,
      use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, 
@@ -92,7 +99,7 @@ def evaluatev0(respth='./pretrained', dspth='./data', backbone='CatNetSmall', sc
 
     with torch.no_grad():
         single_scale = MscEvalV0(scale=scale)
-        mIOU = single_scale(net, dl, 19)
+        mIOU = single_scale(net, dl, 4)    #19mgchen
     logger = logging.getLogger()
     logger.info('mIOU is: %s\n', mIOU)
 
@@ -101,9 +108,9 @@ class MscEval(object):
             model,
             dataloader,
             scales = [0.5, 0.75, 1, 1.25, 1.5, 1.75],
-            n_classes = 19,
+            n_classes = 4, # 19 mgchen
             lb_ignore = 255,
-            cropsize = 1024,
+            cropsize = 192,    #mgchen 1024
             flip = True,
             *args, **kwargs):
         self.scales = scales
@@ -227,7 +234,7 @@ def evaluate(respth='./resv1_catnet/pths/', dspth='./data'):
     logger.info('===='*20)
     logger.info('evaluating the model ...\n')
     logger.info('setup and restore model')
-    n_classes = 19
+    n_classes = 4      #19 mgchen
     net = BiSeNet(n_classes=n_classes)
 
     net.load_state_dict(torch.load(respth))

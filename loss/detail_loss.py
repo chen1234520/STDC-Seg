@@ -45,11 +45,13 @@ class DetailAggregateLoss(nn.Module):
             [-1, -1, -1, -1, 8, -1, -1, -1, -1],
             dtype=torch.float32).reshape(1, 1, 3, 3).requires_grad_(False).type(torch.cuda.FloatTensor)
         
+        # 定义不同步长拉氏变换结果的融合参数权重
         self.fuse_kernel = torch.nn.Parameter(torch.tensor([[6./10], [3./10], [1./10]],
             dtype=torch.float32).reshape(1, 3, 1, 1).type(torch.cuda.FloatTensor))
 
     def forward(self, boundary_logits, gtmasks):
 
+        # 计算不同步长的拉氏变换结果
         # boundary_logits = boundary_logits.unsqueeze(1)
         boundary_targets = F.conv2d(gtmasks.unsqueeze(1).type(torch.cuda.FloatTensor), self.laplacian_kernel, padding=1)
         boundary_targets = boundary_targets.clamp(min=0)

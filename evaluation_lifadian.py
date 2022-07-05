@@ -88,7 +88,9 @@ def evaluatev0(respth='./pretrained', dspth='./data', backbone='CatNetSmall', sc
                     num_workers = n_workers,
                     drop_last = False)
 
-    n_classes = 2  # 19 mgchen
+    n_classes = 3  # 19 mgchen
+    print("n_classes:", n_classes)
+
     print("backbone:", backbone)
     net = BiSeNet(backbone=backbone, n_classes=n_classes,
      use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, 
